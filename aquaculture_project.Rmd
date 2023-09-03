@@ -1,0 +1,238 @@
+---
+title: "CMM535 Coursework"
+author: "Abimbola"
+output:
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Importing neccesary libaries
+
+```{r}
+library(dplyr)
+library(stringr)
+library(tidyr)
+library(ggplot2)
+library(caTools)
+```
+
+Reading the escapes data and displaying the summary statistics.
+
+```{r}
+escapes_df <- read.csv('~/Documents/escapes.csv')
+escapes_df
+summary(escapes_df)
+```
+#Task 1
+
+Selecting the variables Escape species, Average Weight, Age, Site.Name as areas of special interest.
+
+```{r}
+escapes_df <- escapes_df %>%
+                select(Escaped.Species, Age, Average.Weight, Site.Name)
+
+```
+
+Data Cleaning I - Average.Weight
+
+```{r}
+# pre-processing the weights in grams (converting all to kilograms)
+gram_weights <- escapes_df %>%
+                  filter(!grepl('kg', Average.Weight)) %>%
+                  filter(grepl('g|grams', Average.Weight)) %>%
+                  select(Average.Weight) %>%
+                  mutate_all(~gsub('g|grams', '', .))
+
+# averaging the hyphened weights
+gram_weights_hyphen <- gram_weights %>%
+                          filter(grepl('-', Average.Weight))
+
+low_upper_weights <- gram_weights_hyphen %>%
+                          separate(Average.Weight, c('low_lim', 'upper_lim'), sep = '-')
+
+low_upper_weights <- low_upper_weights%>%
+                          transform(low_lim = as.numeric(low_lim)) %>%
+                          transform(upper_lim = as.numeric(upper_lim))
+
+low_upper_weights$weight <- (low_upper_weights$low_lim + low_upper_weights$upper_lim)/2
+
+
+gram_weights[grepl('-', gram_weights$Average.Weight),
+             'Average.Weight'] <- low_upper_weights$weight
+
+gram_weights$Average.Weight <- as.numeric(gram_weights$Average.Weight)/1000
+
+escapes_df[!grepl('kg', escapes_df$Average.Weight) &
+           grepl('g', escapes_df$Average.Weight), 
+           'Average.Weight'] <- gram_weights$Average.Weight
+
+
+# pre-processing the weights in kg (units mentioned)
+kgram_weights <- escapes_df %>%
+                  filter(grepl('kg|kilos', Average.Weight)) %>%
+                  select(Average.Weight) %>%
+                  mutate_all(~gsub('kg|kilos', '', .))
+
+# averaging the hyphened weights
+kgram_weights_hyphen <- kgram_weights %>%
+                          filter(grepl('-', Average.Weight))
+
+low_upper_weights <- kgram_weights_hyphen %>%
+                          separate(Average.Weight, c('low_lim', 'upper_lim'), sep = '-')
+
+low_upper_weights <- low_upper_weights%>%
+                          transform(low_lim = as.numeric(low_lim)) %>%
+                          transform(upper_lim = as.numeric(upper_lim))
+
+low_upper_weights$weight <- (low_upper_weights$low_lim + low_upper_weights$upper_lim)/2
+
+kgram_weights[grepl('-', kgram_weights$Average.Weight),
+             'Average.Weight'] <- low_upper_weights$weight
+
+escapes_df[grepl('kg|kilos', escapes_df$Average.Weight),
+           'Average.Weight'] <- kgram_weights$Average.Weight
+
+# removing all missing/bad values (NA)
+escapes_df <- escapes_df[!is.na(escapes_df$Average.Weight),]
+
+# further pre-processing into numbers and converting the weight in lb to kilograms
+escapes_df[escapes_df$Average.Weight == '~1.0 ',] <- 1.0
+escapes_df[escapes_df$Average.Weight == '1 lb',] <- 0.45
+
+# converting all the weights to numeric and removing bad values
+escapes_df$Average.Weight <- as.numeric(escapes_df$Average.Weight)
+escapes_df <- escapes_df[!is.na(escapes_df$Average.Weight),]
+```
+```{r}
+escapes_df
+summary(escapes_df)
+```
+
+
+Data cleaning II - Age
+
+```{r}
+# pre-processing the ages in months (mentioned)
+months_age <- escapes_df %>%
+                  filter(grepl('month|months|months+|mo|mths', Age)) %>%
+                  select(Age) %>%
+                  mutate_all(~gsub('month|months|months+|mo|mths', '', .))
+
+# averaging the hyphened ages
+months_age_hyphen <- months_age %>%
+                      filter(grepl('-', Age))
+
+low_upper_months <- months_age_hyphen %>%
+                          separate(Age, c('low_lim', 'upper_lim'), sep = '-')
+
+low_upper_months <- low_upper_months%>%
+                          transform(low_lim = as.numeric(low_lim)) %>%
+                          transform(upper_lim = as.numeric(upper_lim))
+
+low_upper_months$age <- (low_upper_months$low_lim + low_upper_months$upper_lim)/2
+
+months_age[grepl('-', months_age$Age),
+             'Age'] <- low_upper_months$age
+
+escapes_df[grepl('month|months|months+|mo|mths', escapes_df$Age), 
+           'Age'] <- months_age$Age
+
+# pre-processing the ages in years (converting into months)
+yrs_age <- escapes_df %>%
+            filter(grepl('yrs', Age)) %>%
+            select(Age) %>%
+            mutate_all(~gsub('yrs', '', .))
+
+yrs_age$Age <- as.numeric(yrs_age$Age)
+
+escapes_df[grepl('yrs', escapes_df$Age), 'Age'] <- yrs_age$Age*12
+
+escapes_df$Age <- as.numeric(escapes_df$Age)
+
+# dropping the bad numerical value, 1999
+escapes_df = escapes_df[escapes_df$Age != 1999,]
+
+# removing all missing/bad values (NA) 
+escapes_df <- escapes_df[!is.na(escapes_df$Age),]
+```
+```{r}
+escapes_df
+summary(escapes_df)
+```
+
+
+
+Reading the analysis data and displaying the summary statistics.
+
+```{r}
+analysis_df <- read.csv('~/Documents/analysis.csv')
+analysis_df
+summary(analysis_df)
+```
+
+Removing the the variables 'year' and 'month' from the data.
+
+```{r}
+analysis_df <- analysis_df %>%
+                  select(-year, -month) %>%
+                  mutate(Site.Name = tolower(Site.Name))
+```
+
+#Task 2
+
+Integrating (merging using INNER JOIN on Site.Name) the 2 dataframes, escapes_df (from escapes.csv) and analysis_df (analysis.csv) into escapesPlus dataframe.
+
+```{r}
+escapesPlus <- merge(escapes_df, analysis_df, by = 'Site.Name')
+
+escapesPlus
+
+write.csv(escapesPlus, 'escapesPlus.csv', row.names = FALSE)
+```
+#Task 3
+
+Exporatory Data Analysis on the dataframe, escapesPlus:
+
+1. Mean Age of fishes belonging to every species escaped. (Bar-Plot)
+2. Mean Age of fishes belonging to each Average Weight of fishes escaped. (Line-Plot)
+
+```{r}
+escapesPlus <- escapesPlus%>%
+                          select(-Site.Name)
+
+escapesPlus %>%
+  group_by(Escaped.Species) %>%
+  summarise(Mean_Age = mean(Age)) %>%
+  ggplot(aes(x = Escaped.Species, y = Mean_Age)) +
+  geom_bar(stat = 'identity', fill = 'red')
+
+escapesPlus %>%
+  group_by(Average.Weight) %>%
+  summarise(Mean_Age = mean(Age)) %>%
+  ggplot(aes(x = Average.Weight, y = Mean_Age)) +
+  geom_line(color = 'red')
+```
+#Task 4
+
+Developing a Linear Regression Model to predict the Age of the fish escaped given it's species, Average Weight and analysis variables: c2, c3, c4, c5, c6 and c7
+
+```{r}
+# 80-20 Train Test Split into Training and Test Sets respectively
+set.seed(123)
+train_combination <- sample.split(escapesPlus, SplitRatio = 0.8)
+train <- escapesPlus[train_combination, ]
+test <- escapesPlus[!train_combination, ]
+
+# Training the Linear Regression Model
+age_prediction_lm <- lm(Age ~ ., data = train)
+summary(age_prediction_lm)
+
+# getting the predictions of the Test Set and Model Performance on Test Set (in terms of R-squared Score)
+test_predictions = predict(age_prediction_lm, newdata = test)
+print(paste0('Test R-squared Score: ', cor(test$Age, test_predictions)**2))
+```
+
